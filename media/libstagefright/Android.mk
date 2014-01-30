@@ -9,8 +9,10 @@ LOCAL_SRC_FILES:=                         \
         AACWriter.cpp                     \
         AMRExtractor.cpp                  \
         AMRWriter.cpp                     \
+        ASFExtractor.cpp                  \
         AudioPlayer.cpp                   \
         AudioSource.cpp                   \
+        AVIExtractor.cpp                  \
         AwesomePlayer.cpp                 \
         CameraSource.cpp                  \
         CameraSourceTimeLapse.cpp         \
@@ -18,6 +20,7 @@ LOCAL_SRC_FILES:=                         \
         DRMExtractor.cpp                  \
         ESDS.cpp                          \
         FileSource.cpp                    \
+        FMRadioSource.cpp                 \
         FLACExtractor.cpp                 \
         HTTPBase.cpp                      \
         JPEGSource.cpp                    \
@@ -34,10 +37,12 @@ LOCAL_SRC_FILES:=                         \
         MediaSource.cpp                   \
         MetaData.cpp                      \
         NuCachedSource2.cpp               \
+        NuCachedFileSource2.cpp           \
         NuMediaExtractor.cpp              \
         OMXClient.cpp                     \
         OMXCodec.cpp                      \
         OggExtractor.cpp                  \
+        PCMExtractor.cpp                  \
         SampleIterator.cpp                \
         SampleTable.cpp                   \
         SkipCutBuffer.cpp                 \
@@ -62,6 +67,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/external/flac/include \
         $(TOP)/external/tremolo \
         $(TOP)/external/openssl/include \
+        $(TOP)/vendor/st-ericsson/external/ASF_Library/include \
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
@@ -85,6 +91,7 @@ LOCAL_SHARED_LIBRARIES := \
         libutils \
         libvorbisidec \
         libz \
+        libhardware \
 
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_color_conversion \

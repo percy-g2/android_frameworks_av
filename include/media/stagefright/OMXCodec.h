@@ -86,6 +86,8 @@ struct OMXCodec : public MediaSource,
     // from MediaBufferObserver
     virtual void signalBufferReturned(MediaBuffer *buffer);
 
+    static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
+
     enum Quirks {
         kNeedsFlushBeforeDisable              = 1,
         kWantsNALFragments                    = 2,
@@ -101,6 +103,8 @@ struct OMXCodec : public MediaSource,
         kAvoidMemcopyInputRecordingFrames     = 2048,
         kRequiresLargerEncoderOutputBuffer    = 4096,
         kOutputBuffersAreUnreadable           = 8192,
+        kRequiresStoreMetaDataBeforeIdle      = 16384,
+        kOverrideDefaultAVCProfile            = 32768,
     };
 
     // for use by ACodec
@@ -246,6 +250,7 @@ private:
             int32_t aacProfile, bool isADTS);
 
     void setG711Format(int32_t numChannels);
+    status_t setWMAFormat(const sp<MetaData> &meta);
 
     status_t setVideoPortFormatType(
             OMX_U32 portIndex,
@@ -352,6 +357,8 @@ private:
     status_t parseAVCCodecSpecificData(
             const void *data, size_t size,
             unsigned *profile, unsigned *level);
+    status_t parseVC1CodecSpecificData(
+            const void *data, size_t size);
 
     OMXCodec(const OMXCodec &);
     OMXCodec &operator=(const OMXCodec &);

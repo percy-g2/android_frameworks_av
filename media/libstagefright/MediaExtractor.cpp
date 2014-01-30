@@ -19,16 +19,19 @@
 #include <utils/Log.h>
 
 #include "include/AMRExtractor.h"
+#include "include/AVIExtractor.h"
 #include "include/MP3Extractor.h"
 #include "include/MPEG4Extractor.h"
 #include "include/WAVExtractor.h"
 #include "include/OggExtractor.h"
+#include "include/PCMExtractor.h"
 #include "include/MPEG2PSExtractor.h"
 #include "include/MPEG2TSExtractor.h"
 #include "include/DRMExtractor.h"
 #include "include/WVMExtractor.h"
 #include "include/FLACExtractor.h"
 #include "include/AACExtractor.h"
+#include "include/ASFExtractor.h"
 
 #include "matroska/MatroskaExtractor.h"
 
@@ -109,6 +112,8 @@ sp<MediaExtractor> MediaExtractor::Create(
         ret = new MatroskaExtractor(source);
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_CONTAINER_MPEG2TS)) {
         ret = new MPEG2TSExtractor(source);
+    } else if (!strcasecmp(mime, MEDIA_MIMETYPE_CONTAINER_AVI)) {
+        ret = new AVIExtractor(source);
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_CONTAINER_WVM)) {
         // Return now.  WVExtractor should not have the DrmFlag set in the block below.
         return new WVMExtractor(source);
@@ -116,6 +121,10 @@ sp<MediaExtractor> MediaExtractor::Create(
         ret = new AACExtractor(source, meta);
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_CONTAINER_MPEG2PS)) {
         ret = new MPEG2PSExtractor(source);
+    } else if (!strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_RAW)) {
+        ret = new PCMExtractor(source);
+    } else if (!strcasecmp(mime, MEDIA_MIMETYPE_CONTAINER_ASF)) {
+        ret = new ASFExtractor(source);
     }
 
     if (ret != NULL) {

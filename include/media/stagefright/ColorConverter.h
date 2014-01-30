@@ -73,6 +73,9 @@ private:
     status_t convertQCOMYUV420SemiPlanar(
             const BitmapParams &src, const BitmapParams &dst);
 
+    status_t convertSTEYUV420PackedSemiPlanarMB(
+            const BitmapParams &src, const BitmapParams &dst);
+
     status_t convertYUV420SemiPlanar(
             const BitmapParams &src, const BitmapParams &dst);
 

@@ -20,6 +20,7 @@
 #include "include/DataUriSource.h"
 #endif
 
+#include "include/AVIExtractor.h"
 #include "include/MP3Extractor.h"
 #include "include/MPEG4Extractor.h"
 #include "include/WAVExtractor.h"
@@ -27,11 +28,13 @@
 #include "include/MPEG2PSExtractor.h"
 #include "include/MPEG2TSExtractor.h"
 #include "include/NuCachedSource2.h"
+#include "include/NuCachedFileSource2.h"
 #include "include/HTTPBase.h"
 #include "include/DRMExtractor.h"
 #include "include/FLACExtractor.h"
 #include "include/AACExtractor.h"
 #include "include/WVMExtractor.h"
+#include "include/ASFExtractor.h"
 
 #include "matroska/MatroskaExtractor.h"
 
@@ -120,6 +123,8 @@ void DataSource::RegisterDefaultSniffers() {
     RegisterSniffer(SniffAAC);
     RegisterSniffer(SniffMPEG2PS);
     RegisterSniffer(SniffWVM);
+    RegisterSniffer(SniffAVI);
+    RegisterSniffer(SniffASF);
 
     char value[PROPERTY_VALUE_MAX];
     if (property_get("drm.service.enabled", value, NULL)
@@ -135,7 +140,7 @@ sp<DataSource> DataSource::CreateFromURI(
 
     sp<DataSource> source;
     if (!strncasecmp("file://", uri, 7)) {
-        source = new FileSource(uri + 7);
+        source = new NuCachedFileSource2(new FileSource(uri + 7));
     } else if (!strncasecmp("http://", uri, 7)
             || !strncasecmp("https://", uri, 8)
             || isWidevine) {
@@ -177,18 +182,29 @@ sp<DataSource> DataSource::CreateFromURI(
 #endif
     } else {
         // Assume it's a filename.
-        source = new FileSource(uri);
+        source = new NuCachedFileSource2(new FileSource(uri));
     }
 
     if (source == NULL || source->initCheck() != OK) {
         return NULL;
     }
 
+    // Save uri
+    source->setCharUri(uri);
+
     return source;
 }
 
 String8 DataSource::getMIMEType() const {
     return String8("application/octet-stream");
+}
+
+void DataSource::setCharUri(const char* uri) {
+    mUri = String8(uri);
+}
+
+const char* DataSource::getCharUri() {
+    return mUri.string();
 }
 
 }  // namespace android

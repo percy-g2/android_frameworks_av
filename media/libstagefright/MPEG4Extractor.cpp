@@ -1073,11 +1073,11 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
                 return err;
             }
 
-            // Assume that a given buffer only contains at most 10 fragments,
+            // Assume that a given buffer only contains at most 128 fragments,
             // each fragment originally prefixed with a 2 byte length will
             // have a 4 byte header (0x00 0x00 0x00 0x01) after conversion,
             // and thus will grow by 2 bytes per fragment.
-            mLastTrack->meta->setInt32(kKeyMaxInputSize, max_size + 10 * 2);
+            mLastTrack->meta->setInt32(kKeyMaxInputSize, max_size + 128 * 2);
             *offset += chunk_size;
 
             // Calculate average frame rate.
@@ -1114,15 +1114,25 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
 
         case FOURCC('c', 't', 't', 's'):
         {
+            uint32_t consumed_offset;
             status_t err =
                 mLastTrack->sampleTable->setCompositionTimeToSampleParams(
-                        data_offset, chunk_data_size);
+                        data_offset, chunk_data_size, &consumed_offset);
 
             if (err != OK) {
                 return err;
             }
 
-            *offset += chunk_size;
+            off64_t chunk_end = *offset + chunk_size;
+            *offset = data_offset + consumed_offset;
+
+            if (*offset < chunk_end) {
+                // Parse 'free' or 'skip' box
+                status_t err = parseChunk(offset, depth + 1);
+                if (err != OK) {
+                    return err;
+                }
+            }
             break;
         }
 
@@ -1452,6 +1462,12 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
             break;
         }
 
+        case FOURCC('f', 'r', 'e', 'e'):
+        case FOURCC('s', 'k', 'i', 'p'):
+        {
+            *offset += chunk_size;
+            break;
+        }
         default:
         {
             *offset += chunk_size;
@@ -1763,7 +1779,8 @@ status_t MPEG4Extractor::verifyTrack(Track *track) {
             return ERROR_MALFORMED;
         }
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_MPEG4)
-            || !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)) {
+            || !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)
+            || !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC_ELD)) {
         if (!track->meta->findData(kKeyESDS, &type, &data, &size)
                 || type != kTypeESDS) {
             return ERROR_MALFORMED;
@@ -1793,12 +1810,13 @@ status_t MPEG4Extractor::updateAudioTrackInfoFromESDS_MPEG4Audio(
         return OK;
     }
 
-    if (objectTypeIndication  == 0x6b) {
+    if (objectTypeIndication  == 0x6b || objectTypeIndication == 0x69) {
         // The media subtype is MP3 audio
         // Our software MP3 audio decoder may not be able to handle
-        // packetized MP3 audio; for now, lets just return ERROR_UNSUPPORTED
-        ALOGE("MP3 track in MP4/3GPP file is not supported");
-        return ERROR_UNSUPPORTED;
+        // packetized MP3 audio;
+        ALOGE("MP3 track in MP4/3GPP file is not supported, "
+            "continuing playback");
+        return OK;
     }
 
     const uint8_t *csd;
@@ -1830,6 +1848,7 @@ status_t MPEG4Extractor::updateAudioTrackInfoFromESDS_MPEG4Audio(
 
     if (objectType == 31) {  // AAC-ELD => additional 6 bits
         objectType = 32 + br.getBits(6);
+        mLastTrack->meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_AAC_ELD);
     }
 
     uint32_t freqIndex = br.getBits(4);
@@ -2428,7 +2447,7 @@ static bool BetterSniffMPEG4(
             case FOURCC('m', 'o', 'o', 'v'):
             {
                 moovAtomEndOffset = offset + chunkSize;
-
+                foundGoodFileType = true;
                 done = true;
                 break;
             }

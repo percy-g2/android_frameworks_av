@@ -42,7 +42,7 @@ struct Crypto : public BnCrypto {
     virtual bool requiresSecureDecoderComponent(
             const char *mime) const;
 
-    virtual ssize_t decrypt(
+    virtual status_t decrypt(
             bool secure,
             const uint8_t key[16],
             const uint8_t iv[16],

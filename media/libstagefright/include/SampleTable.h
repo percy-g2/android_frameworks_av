@@ -49,7 +49,7 @@ public:
     status_t setTimeToSampleParams(off64_t data_offset, size_t data_size);
 
     status_t setCompositionTimeToSampleParams(
-            off64_t data_offset, size_t data_size);
+            off64_t data_offset, size_t data_size, uint32_t *consumed_offset);
 
     status_t setSyncSampleParams(off64_t data_offset, size_t data_size);
 

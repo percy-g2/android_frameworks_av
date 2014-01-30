@@ -34,7 +34,9 @@ static const struct {
     const char *mRole;
 
 } kComponents[] = {
+    { "OMX.ST.aac.decoder", "ste_aacdec", "audio_decoder.aac" },
     { "OMX.google.aac.decoder", "aacdec", "audio_decoder.aac" },
+    { "OMX.google.aac.decoder", "aacdec", "audio_decoder.aeld" },
     { "OMX.google.aac.encoder", "aacenc", "audio_encoder.aac" },
     { "OMX.google.amrnb.decoder", "amrdec", "audio_decoder.amrnb" },
     { "OMX.google.amrnb.encoder", "amrnbenc", "audio_encoder.amrnb" },
@@ -48,9 +50,11 @@ static const struct {
     { "OMX.google.h263.encoder", "mpeg4enc", "video_encoder.h263" },
     { "OMX.google.mpeg4.decoder", "mpeg4dec", "video_decoder.mpeg4" },
     { "OMX.google.mpeg4.encoder", "mpeg4enc", "video_encoder.mpeg4" },
+    { "OMX.ST.mp3.decoder", "ste_mp3dec", "audio_decoder.mp3" },
     { "OMX.google.mp3.decoder", "mp3dec", "audio_decoder.mp3" },
     { "OMX.google.vorbis.decoder", "vorbisdec", "audio_decoder.vorbis" },
     { "OMX.google.vpx.decoder", "vpxdec", "video_decoder.vpx" },
+    { "OMX.ST.AFM.decoder.wmapro_v10", "ste_wmapro_v10", "audio_decoder.wmapro" },
     { "OMX.google.raw.decoder", "rawdec", "audio_decoder.raw" },
     { "OMX.google.flac.encoder", "flacenc", "audio_encoder.flac" },
 };

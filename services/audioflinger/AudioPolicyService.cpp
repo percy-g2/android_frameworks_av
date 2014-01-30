@@ -688,8 +688,9 @@ bool AudioPolicyService::AudioCommandThread::threadLoop()
                     if (command->mWaitStatus) {
                         command->mCond.signal();
                         mWaitWorkCV.wait(mLock);
+                    } else {
+                        delete data;
                     }
-                    delete data;
                     }break;
                 case SET_PARAMETERS: {
                     ParametersData *data = (ParametersData *)command->mParam;
@@ -699,8 +700,9 @@ bool AudioPolicyService::AudioCommandThread::threadLoop()
                     if (command->mWaitStatus) {
                         command->mCond.signal();
                         mWaitWorkCV.wait(mLock);
+                    } else {
+                        delete data;
                     }
-                    delete data;
                     }break;
                 case SET_VOICE_VOLUME: {
                     VoiceVolumeData *data = (VoiceVolumeData *)command->mParam;
@@ -710,13 +712,16 @@ bool AudioPolicyService::AudioCommandThread::threadLoop()
                     if (command->mWaitStatus) {
                         command->mCond.signal();
                         mWaitWorkCV.wait(mLock);
+                    } else {
+                        delete data;
                     }
-                    delete data;
                     }break;
                 default:
                     ALOGW("AudioCommandThread() unknown command %d", command->mCommand);
                 }
-                delete command;
+                if (!mLastCommand.mWaitStatus) {
+                    delete command;
+                }
                 waitTime = INT64_MAX;
             } else {
                 waitTime = mAudioCommands[0]->mTime - curTime;
@@ -824,6 +829,8 @@ status_t AudioPolicyService::AudioCommandThread::volumeCommand(audio_stream_type
     if (command->mWaitStatus) {
         command->mCond.wait(mLock);
         status =  command->mStatus;
+        delete data;
+        delete command;
         mWaitWorkCV.signal();
     }
     return status;
@@ -854,6 +861,8 @@ status_t AudioPolicyService::AudioCommandThread::parametersCommand(audio_io_hand
     if (command->mWaitStatus) {
         command->mCond.wait(mLock);
         status =  command->mStatus;
+        delete data;
+        delete command;
         mWaitWorkCV.signal();
     }
     return status;
@@ -880,6 +889,8 @@ status_t AudioPolicyService::AudioCommandThread::voiceVolumeCommand(float volume
     if (command->mWaitStatus) {
         command->mCond.wait(mLock);
         status =  command->mStatus;
+        delete data;
+        delete command;
         mWaitWorkCV.signal();
     }
     return status;

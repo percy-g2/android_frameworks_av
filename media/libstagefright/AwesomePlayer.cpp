@@ -28,6 +28,7 @@
 #include "include/DRMExtractor.h"
 #include "include/SoftwareRenderer.h"
 #include "include/NuCachedSource2.h"
+#include "include/NuCachedFileSource2.h"
 #include "include/ThrottledSource.h"
 #include "include/MPEG2TSExtractor.h"
 #include "include/WVMExtractor.h"
@@ -41,6 +42,7 @@
 #include <media/stagefright/AudioPlayer.h>
 #include <media/stagefright/DataSource.h>
 #include <media/stagefright/FileSource.h>
+#include <media/stagefright/FMRadioSource.h>
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaExtractor.h>
@@ -305,7 +307,7 @@ status_t AwesomePlayer::setDataSource(
 
     reset_l();
 
-    sp<DataSource> dataSource = new FileSource(fd, offset, length);
+    sp<DataSource> dataSource = new NuCachedFileSource2(new FileSource(fd, offset, length));
 
     status_t err = dataSource->initCheck();
 
@@ -1592,7 +1594,7 @@ void AwesomePlayer::onVideoEvent() {
             mVideoBuffer = NULL;
         }
 
-        if (mSeeking == SEEK && isStreamingHTTP() && mAudioSource != NULL
+        if (mSeeking == SEEK && mAudioSource != NULL
                 && !(mFlags & SEEK_PREVIEW)) {
             // We're going to seek the video source first, followed by
             // the audio source.
@@ -2105,6 +2107,13 @@ status_t AwesomePlayer::finishSetDataSource_l() {
                 ALOGI("Prepare cancelled while waiting for initial cache fill.");
                 return UNKNOWN_ERROR;
             }
+        }
+    } else if (!strncasecmp("fmradio://rx", mUri.string(), 12)) {
+        sniffedMIME = MEDIA_MIMETYPE_AUDIO_RAW;
+        dataSource = new FMRadioSource();
+        status_t err = dataSource->initCheck();
+        if (err != OK) {
+            return err;
         }
     } else {
         dataSource = DataSource::CreateFromURI(mUri.string(), &mUriHeaders);

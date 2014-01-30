@@ -24,6 +24,7 @@
 #include <utils/Vector.h>
 #include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MediaBuffer.h>
+#include <hardware/copybit.h>
 
 namespace android {
 // ----------------------------------------------------------------------------
@@ -56,7 +57,8 @@ class SurfaceMediaSource : public MediaSource,
                                 public MediaBufferObserver,
                                 protected BufferQueue::ConsumerListener {
 public:
-    enum { MIN_UNDEQUEUED_BUFFERS = 4};
+    enum { MIN_UNDEQUEUED_BUFFERS = 4,
+           MAX_UNDEQUEUED_BUFFERS = 10 };
 
     struct FrameAvailableListener : public virtual RefBase {
         // onFrameAvailable() is called from queueBuffer() is the FIFO is
@@ -165,6 +167,10 @@ private:
     // this list in signalBufferReturned
     Vector<sp<GraphicBuffer> > mCurrentBuffers;
 
+    // mCurrentBuffersDQ is used to free buffers of mBufferSlot. This is used
+    // only when conversion takes place.
+    Vector<sp<GraphicBuffer> > mCurrentBuffersDQ;
+
     // mCurrentTimestamp is the timestamp for the current texture. It
     // gets set to mLastQueuedTimestamp each time updateTexImage is called.
     int64_t mCurrentTimestamp;
@@ -208,6 +214,30 @@ private:
 
     // Avoid copying and equating and default constructor
     DISALLOW_IMPLICIT_CONSTRUCTORS(SurfaceMediaSource);
+
+    // mGraphicBufferAlloc is the connection to SurfaceFlinger that is used to
+    // allocate new GraphicBuffer objects.
+    sp<IGraphicBufferAlloc> mGraphicBufferAlloc;
+
+    // HAL pixel format for yuv buffer
+    int mYuvPixelFormat;
+
+    // Set true when read called for first time
+    // Used to avoid setting of 'mStopped' Flag in onBuffersReleased when
+    // setBufferCount is called for first time
+    bool mIsReading;
+
+    sp<GraphicBuffer> mGraphicBufferYuv[MAX_UNDEQUEUED_BUFFERS];
+
+    // returns TRUE if buffer needs color format conversion
+    bool conversionIsNeeded(const sp<GraphicBuffer>& graphicBuffer);
+
+    // converts buffer to a suitable color format
+    status_t convert(const sp<GraphicBuffer> &srcBuf, const sp<GraphicBuffer> &dstBuf);
+
+    // mBlitEngine is the handle to the copybit device which will be used in
+    // case color transform is needed before the buffer is sent to encoder.
+    copybit_device_t* mBlitEngine;
 };
 
 // ----------------------------------------------------------------------------

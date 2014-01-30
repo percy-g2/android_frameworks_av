@@ -154,12 +154,20 @@ enum {
     kKeyCryptoKey         = 'cryK',  // uint8_t[16]
     kKeyCryptoIV          = 'cryI',  // uint8_t[16]
     kKeyCryptoMode        = 'cryM',  // int32_t
+
+    // To store the extracted metadata in VC1 streams
+    kKeyVC1Info = 'info',  //raw data
+
+    // To store the extracted metadata in WMA streams
+    kKeyWMAInfo = 'wmai', //raw data
 };
 
 enum {
     kTypeESDS        = 'esds',
     kTypeAVCC        = 'avcc',
     kTypeD263        = 'd263',
+    kTypeVC1         = 'wmv3',
+    kTypeWMA         = 'wmau',
 };
 
 class MetaData : public RefBase {

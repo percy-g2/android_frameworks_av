@@ -34,7 +34,12 @@
 namespace android {
 
 ElementaryStreamQueue::ElementaryStreamQueue(Mode mode)
-    : mMode(mode) {
+    : mMode(mode),
+      mFrameSizeCBR(0),
+      mSamplingRateCBR(0),
+      mNumChannelsCBR(0),
+      mBitRateCBR(0),
+      mNumSamplesCBR(0){
 }
 
 sp<MetaData> ElementaryStreamQueue::getFormat() {
@@ -360,7 +365,7 @@ sp<ABuffer> ElementaryStreamQueue::dequeueAccessUnitAAC() {
             TRESPASS();
         }
 
-        if (offset + aac_frame_length > mBuffer->size()) {
+        if (offset + aac_frame_length > mBuffer->size() || offset + aac_frame_length > 8192) {
             break;
         }
 
@@ -555,9 +560,24 @@ sp<ABuffer> ElementaryStreamQueue::dequeueAccessUnitMPEGAudio() {
 
     size_t frameSize;
     int samplingRate, numChannels, bitrate, numSamples;
-    CHECK(GetMPEGAudioFrameSize(
+
+    // If the VBR flow will fail the flow will get automatically switched
+    // to CBR.
+    if(GetMPEGAudioFrameSize(
                 header, &frameSize, &samplingRate, &numChannels,
-                &bitrate, &numSamples));
+                &bitrate, &numSamples)) {
+        mFrameSizeCBR = frameSize;
+        mSamplingRateCBR = samplingRate;
+        mNumChannelsCBR = numChannels;
+        mBitRateCBR = bitrate;
+        mNumSamplesCBR = numSamples;
+    } else {
+        frameSize = mFrameSizeCBR;
+        samplingRate = mSamplingRateCBR;
+        numChannels = mNumChannelsCBR;
+        bitrate = mBitRateCBR;
+        numSamples = mNumSamplesCBR;
+    }
 
     if (size < frameSize) {
         return NULL;

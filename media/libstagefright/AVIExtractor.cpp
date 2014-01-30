@@ -35,6 +35,12 @@
 
 namespace android {
 
+static const int32_t kSizeOfVC1Info = 20;
+static const int32_t kSizeOfVC1ExtraData = 4;
+static const int32_t kSizeOfBitmapInfoHeader = 40;
+static const int32_t kSizeOfFrameHeader = 4;
+static const uint32_t kVC1FrameHeader = 0x0000010d;
+
 struct AVIExtractor::AVISource : public MediaSource {
     AVISource(const sp<AVIExtractor> &extractor, size_t trackIndex);
 
@@ -182,16 +188,45 @@ status_t AVIExtractor::AVISource::read(
             return ERROR_END_OF_STREAM;
         }
 
+        ssize_t n;
         MediaBuffer *out;
         CHECK_EQ(mBufferGroup->acquire_buffer(&out), (status_t)OK);
+        if (!mExtractor->mIsVC1AdvancedProfile) {
+            n = mExtractor->mDataSource->readAt(offset, out->data(), size);
+            out->set_range(0, size);
+        } else {
+            uint8_t frameHeader[] = {0x00, 0x00, 0x01, 0x0d};
 
-        ssize_t n = mExtractor->mDataSource->readAt(offset, out->data(), size);
+            // Define a pointer which is at an offset of frame header size
+            // from the starting of the buffer
+            uint8_t *pData = (uint8_t *)out->data() + kSizeOfFrameHeader;
+
+            // Read the data from the DataSource at the appointed location
+            n = mExtractor->mDataSource->readAt(offset, pData, size);
+
+            // Copy the frameheader to the starting address of the buffer
+            memcpy(out->data(), frameHeader, kSizeOfFrameHeader);
+
+            // Set the appropriate buffer ranges inclusive of frame header size
+            uint32_t startCode;
+            startCode = (pData[0] << 16) | (pData[1] << 8) | pData[2];
+            if (startCode == 0x000001) {
+                uint32_t frameStartCode = 0;
+                int32_t index = 0;
+                while (frameStartCode != kVC1FrameHeader && index < size - 3) {
+                       frameStartCode = (pData[index] << 24) | (pData[index + 1] << 16)
+                                | (pData[index + 2] << 8) | pData[index + 3];
+                       index++;
+                 }
+                 out->set_range(index - 1 + kSizeOfFrameHeader, size - (index - 1));
+            } else {
+                 out->set_range(0, size + kSizeOfFrameHeader);
+            }
+        }
 
         if (n < (ssize_t)size) {
             return n < 0 ? (status_t)n : (status_t)ERROR_MALFORMED;
         }
-
-        out->set_range(0, size);
 
         out->meta_data()->setInt64(kKeyTime, timeUs);
 
@@ -366,7 +401,9 @@ status_t AVIExtractor::MP3Splitter::read(MediaBuffer **out) {
 ////////////////////////////////////////////////////////////////////////////////
 
 AVIExtractor::AVIExtractor(const sp<DataSource> &dataSource)
-    : mDataSource(dataSource) {
+    : mIsVC1SimpleProfile(false),
+      mIsVC1AdvancedProfile(false),
+      mDataSource(dataSource) {
     mInitCheck = parseHeaders();
 
     if (mInitCheck != OK) {
@@ -581,6 +618,12 @@ static const char *GetMIMETypeForHandler(uint32_t handler) {
         case FOURCC('v', 's', 's', 'h'):
             return MEDIA_MIMETYPE_VIDEO_AVC;
 
+        case FOURCC('w', 'm', 'v', '3'):
+        case FOURCC('W', 'M', 'V', '3'):
+        case FOURCC('w', 'v', 'c', '1'):
+        case FOURCC('W', 'V', 'C', '1'):
+            return MEDIA_MIMETYPE_VIDEO_VC1;
+
         default:
             return NULL;
     }
@@ -620,6 +663,17 @@ status_t AVIExtractor::parseStreamHeader(off64_t offset, size_t size) {
 
     if (type == FOURCC('v', 'i', 'd', 's')) {
         mime = GetMIMETypeForHandler(handler);
+        if (mime != NULL && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_VC1) &&
+                (handler == FOURCC('w', 'm', 'v', '3') ||
+                handler == FOURCC('W', 'M', 'V', '3'))) {
+            mIsVC1SimpleProfile= true;
+        }
+
+        if (mime != NULL && !strcasecmp(mime, MEDIA_MIMETYPE_VIDEO_VC1) &&
+                (handler == FOURCC('w', 'v', 'c', '1') ||
+                handler == FOURCC('W', 'V', 'C', '1'))) {
+            mIsVC1AdvancedProfile= true;
+        }
 
         if (mime && strncasecmp(mime, "video/", 6)) {
             return ERROR_MALFORMED;
@@ -627,10 +681,10 @@ status_t AVIExtractor::parseStreamHeader(off64_t offset, size_t size) {
 
         if (mime == NULL) {
             ALOGW("Unsupported video format '%c%c%c%c'",
-                 (char)(handler >> 24),
-                 (char)((handler >> 16) & 0xff),
-                 (char)((handler >> 8) & 0xff),
-                 (char)(handler & 0xff));
+                    (char)(handler >> 24),
+                    (char)((handler >> 16) & 0xff),
+                    (char)((handler >> 8) & 0xff),
+                    (char)(handler & 0xff));
         }
 
         kind = Track::VIDEO;
@@ -697,6 +751,33 @@ status_t AVIExtractor::parseStreamFormat(off64_t offset, size_t size) {
     if (isVideo) {
         uint32_t width = U32LE_AT(&data[4]);
         uint32_t height = U32LE_AT(&data[8]);
+
+        if (mIsVC1SimpleProfile) {
+            ssize_t s = mDataSource->readAt(offset + kSizeOfBitmapInfoHeader,
+                    track->extraData, kSizeOfVC1ExtraData);
+            if (s < (ssize_t)kSizeOfVC1ExtraData) {
+                return s < 0 ? (status_t)s : ERROR_MALFORMED;
+            }
+        } else if (mIsVC1AdvancedProfile) { // VC1 Advanced Profile
+                // Resync to the start code from 13th Byte as we already consumed 12 bytes
+            uint32_t index = 12;
+            uint32_t startCode = 0;
+
+            while (startCode != 0x00000001 && index < size) {
+                startCode = (data[index] << 16) | (data[index + 1] << 8) | data[index + 2];
+                index++;
+            }
+            // Calculate total size of Sequence Header and Entry Point header
+            // based on strf chunk size
+            uint32_t seqHdrEntryPtHdrSize = size - index + 1;
+            offset += index - 1;
+            track->apExtraData = (uint8_t *)malloc(seqHdrEntryPtHdrSize);
+            track->apExtraDataSize = seqHdrEntryPtHdrSize;
+            ssize_t s = mDataSource->readAt(offset, track->apExtraData, seqHdrEntryPtHdrSize);
+            if (s < (ssize_t)seqHdrEntryPtHdrSize) {
+                return s < 0 ? (status_t)s : ERROR_MALFORMED;
+            }
+        }
 
         track->mMeta->setInt32(kKeyWidth, width);
         track->mMeta->setInt32(kKeyHeight, height);
@@ -769,16 +850,18 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
         return ERROR_MALFORMED;
     }
 
-    sp<ABuffer> buffer = new ABuffer(size);
-    ssize_t n = mDataSource->readAt(offset, buffer->data(), buffer->size());
-
-    if (n < (ssize_t)size) {
-        return n < 0 ? (status_t)n : ERROR_MALFORMED;
-    }
-
+    sp<ABuffer> buffer = new ABuffer(16);
+    ssize_t n;
     const uint8_t *data = buffer->data();
+    off64_t current_offset = offset;
 
     while (size > 0) {
+        n = mDataSource->readAt(current_offset, buffer->data(), 16);
+        current_offset += 16;
+
+        if (n < 16) {
+            return ERROR_MALFORMED;
+        }
         uint32_t chunkType = U32_AT(data);
 
         uint8_t hi = chunkType >> 24;
@@ -801,7 +884,6 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
         }
 
         if (track->mKind == Track::OTHER) {
-            data += 16;
             size -= 16;
             continue;
         }
@@ -837,7 +919,6 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
             ++track->mNumSyncSamples;
         }
 
-        data += 16;
         size -= 16;
     }
 
@@ -877,7 +958,7 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
 
             double avgChunkSize = 0;
             size_t j;
-            for (j = 0; j <= numSamplesToAverage; ++j) {
+            for (j = 0; j < numSamplesToAverage; ++j) {
                 off64_t offset;
                 size_t size;
                 bool isKey;
@@ -912,6 +993,7 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
         ALOGV("track %d duration = %.2f secs", i, durationUs / 1E6);
 
         track->mMeta->setInt64(kKeyDuration, durationUs);
+        track->mMaxSampleSize = (((track->mMaxSampleSize + 15)/16)*16) + 16;
         track->mMeta->setInt32(kKeyMaxInputSize, track->mMaxSampleSize);
 
         const char *tmp;
@@ -935,6 +1017,8 @@ status_t AVIExtractor::parseIndex(off64_t offset, size_t size) {
                 err = addMPEG4CodecSpecificData(i);
             } else if (!strcasecmp(mime.c_str(), MEDIA_MIMETYPE_VIDEO_AVC)) {
                 err = addH264CodecSpecificData(i);
+            } else if (!strcasecmp(mime.c_str(), MEDIA_MIMETYPE_VIDEO_VC1)) {
+                err = addVC1CodecSpecificData(i);
             }
 
             if (err != OK) {
@@ -1001,13 +1085,47 @@ status_t AVIExtractor::addMPEG4CodecSpecificData(size_t trackIndex) {
 
     off64_t offset;
     size_t size;
-    bool isKey;
     int64_t timeUs;
-    status_t err =
-        getSampleInfo(trackIndex, 0, &offset, &size, &isKey, &timeUs);
+    bool isKey = false;
+    bool KeyFound = false;
+    bool NonKeyFound = false;
+    size_t sampleIndex;
+    size_t VOPIndex;
+    size_t NB_SAMPLES_MAX = 100;
 
-    if (err != OK) {
-        return err;
+    for (sampleIndex = 0; sampleIndex < NB_SAMPLES_MAX; sampleIndex++) {
+        status_t err =
+            getSampleInfo(
+                trackIndex, sampleIndex, &offset, &size, &isKey, &timeUs);
+
+        if (err != OK) {
+            return err;
+        }
+        if (size > 0) {
+            if (isKey) {
+                // exit at first key frame
+                KeyFound = true;
+                break;
+            } else {
+                if (!NonKeyFound) {
+                    // save first non-key frame in case no key frame is found
+                    VOPIndex = sampleIndex;
+                    NonKeyFound = true;
+                }
+            }
+        }
+    }
+
+    if (KeyFound) {
+        ALOGV("Extracting specific data from key frame at index=%d size=%d", sampleIndex, size);
+    } else {
+        ALOGW("No key frame found within %d samples, extracting codec-specific data from non-key frame at index = %d, size = %d", NB_SAMPLES_MAX, VOPIndex, size);
+        status_t err =
+            getSampleInfo(
+                trackIndex, VOPIndex, &offset, &size, &isKey, &timeUs);
+        if (err != OK) {
+            return err;
+        }
     }
 
     sp<ABuffer> buffer = new ABuffer(size);
@@ -1097,6 +1215,63 @@ status_t AVIExtractor::addH264CodecSpecificData(size_t trackIndex) {
     track->mMeta->setInt32(kKeyWidth, width);
     track->mMeta->setInt32(kKeyHeight, height);
     track->mMeta->setData(kKeyAVCC, type, csd, csdSize);
+
+    return OK;
+}
+
+status_t AVIExtractor::addVC1CodecSpecificData(size_t trackIndex) {
+    Track *track = &mTracks.editItemAt(trackIndex);
+    uint8_t extraData[kSizeOfVC1Info];
+    int32_t width, height;
+
+    CHECK(track->mMeta->findInt32(kKeyWidth, &width));
+    CHECK(track->mMeta->findInt32(kKeyHeight, &height));
+
+    memset(extraData, 0, kSizeOfVC1Info);
+
+    /*************************************************************************************
+      * If the profile is advanced profile (0xC),                                        *
+      *            then the third byte amongst the first 8 bytes is set to 0x1           *
+      *            subsequent STRUCT_C and STRUCT_A information are ignored by decoder   *
+      * Else, for simple (0x0) and main profiles (0x4)                                   *
+      *            populate the STRUCT_C and STRUCT_A information packed as shown below  *
+      *                                                                                  *
+      *  --------------------------------------------------------                        *
+      * |      |      |      |      |      |      |      |      |                        *
+      * |  00  |  00  |  0x  |  00  |  00  |  00  |  00  |  00  |                        *
+      * |      |      |      |      |      |      |      |      |                        *
+      *  --------------------------------------------------------                        *
+      * |      |      |      |      |      |      |      |      |                        *
+      * |  Sc0 |  Sc1 |  Sc2 |  Sc3 |  Sa0 |  Sa1 | Sa2  |  Sa3 |                        *
+      * |      |      |      |      |      |      |      |      |                        *
+      *  -----------------------------------------------                                 *
+      * |      |      |      |      |      |      |      |      |                        *
+      * |  Sa4 |  Sa5 |  Sa6 |  Sa7 |      |      |      |      |                        *
+      * |      |      |      |      |      |      |      |      |                        *
+      *  --------------------------------------------------------                        *
+      ************************************************************************************
+    */
+
+    if (mIsVC1SimpleProfile) {
+        ALOGV("VC1 Simple/Main Profile");
+
+        int32_t extradata_le = U32LE_AT(track->extraData);
+        memcpy(&extraData[8], &extradata_le, 4);
+
+        int32_t height_le = U32LE_AT((uint8_t *)&height);
+        memcpy(&extraData[12], &height_le, 4);
+
+        int32_t width_le = U32LE_AT((uint8_t *)&width);
+        memcpy(&extraData[16], &width_le, 4);
+
+        //storing the extradata in the metadata to enable the accessing of the data globally
+        track->mMeta->setData(kKeyVC1Info, kTypeVC1, extraData, kSizeOfVC1Info);
+    } else if (mIsVC1AdvancedProfile) {
+        ALOGV("VC1 Advanced Profile");
+        track->mMeta->setData(kKeyVC1Info, kTypeVC1, track->apExtraData, track->apExtraDataSize);
+        track->mMaxSampleSize += kSizeOfFrameHeader;
+        free(track->apExtraData);
+    }
 
     return OK;
 }

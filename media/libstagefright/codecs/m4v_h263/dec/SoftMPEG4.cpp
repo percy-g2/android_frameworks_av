@@ -280,6 +280,34 @@ OMX_ERRORTYPE SoftMPEG4::internalSetParameter(
             return OMX_ErrorNone;
         }
 
+        case OMX_IndexParamPortDefinition:
+        {
+            if (mMode == MODE_H263) {
+                OMX_PARAM_PORTDEFINITIONTYPE *defParams =
+                    (OMX_PARAM_PORTDEFINITIONTYPE *)params;
+                OMX_VIDEO_PORTDEFINITIONTYPE *video_def = &(defParams->format.video);
+                OMX_PARAM_PORTDEFINITIONTYPE *def = NULL;
+
+                mCropLeft                      = 0;
+                mCropTop                       = 0;
+                mCropRight                     = video_def->nFrameWidth  - 1;
+                mCropBottom                    = video_def->nFrameHeight - 1;
+
+                // Input & Output is getting the same width & height
+                def                            = &editPortInfo(0)->mDef;
+                def->format.video.nFrameWidth  = video_def->nFrameWidth;
+                def->format.video.nFrameHeight = video_def->nFrameHeight;
+                def->format.video.nStride      = def->format.video.nFrameWidth;
+                def->format.video.nSliceHeight = def->format.video.nFrameHeight;
+                def                            = &editPortInfo(1)->mDef;
+                def->format.video.nFrameWidth  = video_def->nFrameWidth;
+                def->format.video.nFrameHeight = video_def->nFrameHeight;
+                def->format.video.nStride      = def->format.video.nFrameWidth;
+                def->format.video.nSliceHeight = def->format.video.nFrameHeight;
+            }
+            return SimpleSoftOMXComponent::internalSetParameter(index, params);
+        }
+
         default:
             return SimpleSoftOMXComponent::internalSetParameter(index, params);
     }
@@ -480,6 +508,14 @@ void SoftMPEG4::onQueueFilled(OMX_U32 portIndex) {
 bool SoftMPEG4::portSettingsChanged() {
     int32_t disp_width, disp_height;
     PVGetVideoDimensions(mHandle, &disp_width, &disp_height);
+
+    if (mMode == MODE_H263) {
+        if (mCropRight != disp_width  - 1
+               || mCropBottom != disp_height - 1) {
+            disp_width  = mCropRight  + 1;
+            disp_height = mCropBottom + 1;
+        }
+    }
 
     int32_t buf_width, buf_height;
     PVGetBufferDimensions(mHandle, &buf_width, &buf_height);
