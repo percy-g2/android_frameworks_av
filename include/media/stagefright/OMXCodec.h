@@ -123,6 +123,7 @@ struct OMXCodec : public MediaSource,
 #endif
 #ifdef STE_HARDWARE
         kRequiresStoreMetaDataBeforeIdle      = 16384,
+        kOverrideDefaultAVCProfile            = 32768,
 #endif
     };
 
@@ -283,6 +284,7 @@ private:
             int32_t aacProfile, bool isADTS);
 
     void setG711Format(int32_t numChannels);
+    status_t setWMAFormat(const sp<MetaData> &meta);
 #ifdef QCOM_HARDWARE
     void setQCELPFormat( int32_t sampleRate, int32_t numChannels, int32_t bitRate);
     void setEVRCFormat( int32_t sampleRate, int32_t numChannels, int32_t bitRate);
@@ -395,6 +397,8 @@ private:
     status_t parseAVCCodecSpecificData(
             const void *data, size_t size,
             unsigned *profile, unsigned *level);
+    status_t parseVC1CodecSpecificData(
+            const void *data, size_t size);
 
 #ifdef QCOM_HARDWARE
     status_t flushBuffersOnError(void);

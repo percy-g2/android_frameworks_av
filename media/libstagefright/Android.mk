@@ -23,8 +23,10 @@ LOCAL_SRC_FILES:=                         \
         AACWriter.cpp                     \
         AMRExtractor.cpp                  \
         AMRWriter.cpp                     \
+        ASFExtractor.cpp                  \
         AudioPlayer.cpp                   \
         AudioSource.cpp                   \
+        AVIExtractor.cpp                  \
         AwesomePlayer.cpp                 \
         CameraSource.cpp                  \
         CameraSourceTimeLapse.cpp         \
@@ -47,6 +49,7 @@ LOCAL_SRC_FILES:=                         \
         MediaExtractor.cpp                \
         MediaSource.cpp                   \
         MetaData.cpp                      \
+        NuCachedFileSource2.cpp           \
         NuCachedSource2.cpp               \
         NuMediaExtractor.cpp              \
         OMXClient.cpp                     \
@@ -106,7 +109,8 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/external/openssl/include \
         $(TOP)/hardware/qcom/display/libgralloc \
         $(TOP)/hardware/qcom/media/mm-core/inc \
-        $(TOP)/system/core/include
+        $(TOP)/system/core/include \
+        $(TOP)/frameworks/av/include/media/stagefright/ASF_Library/include
 
 LOCAL_SHARED_LIBRARIES := \
         libbinder \
@@ -130,6 +134,7 @@ LOCAL_SHARED_LIBRARIES := \
         libutils \
         libvorbisidec \
         libz \
+        libhardware
 
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_color_conversion \

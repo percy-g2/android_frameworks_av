@@ -841,6 +841,8 @@ status_t ACodec::setComponentRole(
             "audio_decoder.amrwb", "audio_encoder.amrwb" },
         { MEDIA_MIMETYPE_AUDIO_AAC,
             "audio_decoder.aac", "audio_encoder.aac" },
+        { MEDIA_MIMETYPE_AUDIO_AAC_ELD,
+            "audio_decoder.aeld", "audio_encoder.aeld" },
         { MEDIA_MIMETYPE_AUDIO_VORBIS,
             "audio_decoder.vorbis", "audio_encoder.vorbis" },
         { MEDIA_MIMETYPE_AUDIO_G711_MLAW,
@@ -937,7 +939,8 @@ status_t ACodec::configureCodec(
                 err = setupVideoDecoder(mime, width, height);
             }
         }
-    } else if (!strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)) {
+    } else if (!strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)
+           || !strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC_ELD)) {
         int32_t numChannels, sampleRate;
         if (!msg->findInt32("channel-count", &numChannels)
                 || !msg->findInt32("sample-rate", &sampleRate)) {
@@ -1020,6 +1023,12 @@ status_t ACodec::configureCodec(
         err = setMinBufferSize(kPortIndexInput, (size_t)maxInputSize);
     } else if (!strcmp("OMX.Nvidia.aac.decoder", mComponentName.c_str())) {
         err = setMinBufferSize(kPortIndexInput, 8192);  // XXX
+    } else if (!strncasecmp(mime, "video/", 6)) {
+        int32_t width, height;
+        CHECK(msg->findInt32("width", &width));
+        CHECK(msg->findInt32("height", &height));
+
+        err = setMinBufferSize(kPortIndexInput, (size_t)(width * height));
     }
 
     return err;

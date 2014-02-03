@@ -186,12 +186,20 @@ enum {
     //Extractor sets this
     kKeyUseArbitraryMode  = 'ArbM'  //bool (int32_t)
 #endif
+
+    // To store the extracted metadata in VC1 streams
+    kKeyVC1Info = 'info',  //raw data
+
+    // To store the extracted metadata in WMA streams
+    kKeyWMAInfo = 'wmai', //raw data
 };
 
 enum {
     kTypeESDS        = 'esds',
     kTypeAVCC        = 'avcc',
     kTypeD263        = 'd263',
+    kTypeVC1         = 'wmv3',
+    kTypeWMA         = 'wmau',
 };
 enum {
     kTypeDivXVer_3_11,

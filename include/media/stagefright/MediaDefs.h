@@ -41,6 +41,9 @@ extern const char *MEDIA_MIMETYPE_AUDIO_MPEG;           // layer III
 extern const char *MEDIA_MIMETYPE_AUDIO_MPEG_LAYER_I;
 extern const char *MEDIA_MIMETYPE_AUDIO_MPEG_LAYER_II;
 extern const char *MEDIA_MIMETYPE_AUDIO_AAC;
+#ifdef STE_HARDWARE
+extern const char *MEDIA_MIMETYPE_AUDIO_AAC_ELD;
+#endif
 extern const char *MEDIA_MIMETYPE_AUDIO_QCELP;
 extern const char *MEDIA_MIMETYPE_AUDIO_VORBIS;
 extern const char *MEDIA_MIMETYPE_AUDIO_G711_ALAW;
@@ -48,6 +51,9 @@ extern const char *MEDIA_MIMETYPE_AUDIO_G711_MLAW;
 extern const char *MEDIA_MIMETYPE_AUDIO_RAW;
 extern const char *MEDIA_MIMETYPE_AUDIO_FLAC;
 extern const char *MEDIA_MIMETYPE_AUDIO_AAC_ADTS;
+#ifdef STE_HARDWARE
+extern const char *MEDIA_MIMETYPE_AUDIO_WMA;
+#endif
 extern const char *MEDIA_MIMETYPE_AUDIO_DTS;
 
 extern const char *MEDIA_MIMETYPE_CONTAINER_MPEG4;
@@ -58,6 +64,9 @@ extern const char *MEDIA_MIMETYPE_CONTAINER_MPEG2TS;
 extern const char *MEDIA_MIMETYPE_CONTAINER_AVI;
 extern const char *MEDIA_MIMETYPE_CONTAINER_MPEG2PS;
 extern const char *MEDIA_MIMETYPE_CONTAINER_WVM;
+#ifdef STE_HARDWARE
+extern const char *MEDIA_MIMETYPE_CONTAINER_ASF;
+#endif
 extern const char *MEDIA_MIMETYPE_AUDIO_WMAPRO;
 extern const char *MEDIA_MIMETYPE_AUDIO_WMALSL;
 

@@ -45,6 +45,8 @@
 
 #include <audio_utils/primitives.h>
 
+#define OBTAIN_BUFFER_WAIT_TIME (70)
+
 namespace android {
 // ---------------------------------------------------------------------------
 
@@ -1153,7 +1155,7 @@ status_t AudioTrack::obtainBuffer(Buffer* audioBuffer, int32_t waitCount)
     status_t result = NO_ERROR;
     audio_track_cblk_t* cblk = mCblk;
     uint32_t framesReq = audioBuffer->frameCount;
-    uint32_t waitTimeMs = (waitCount < 0) ? cblk->bufferTimeoutMs : WAIT_PERIOD_MS;
+    uint32_t waitTimeMs = (waitCount < 0) ? cblk->bufferTimeoutMs : OBTAIN_BUFFER_WAIT_TIME;
 
     audioBuffer->frameCount  = 0;
     audioBuffer->size = 0;
