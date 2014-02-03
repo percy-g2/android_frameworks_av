@@ -31,6 +31,14 @@
 #include <utils/Log.h>
 #include <utils/String8.h>
 
+#ifdef STE_HARDWARE
+#define STE_ENCODER_COLOR_FORMAT "ste.video.enc.fmt"
+#include <ui/Region.h>
+#include <hardware/hardware.h>
+#include <ui/PixelFormat.h>
+#include <cutils/properties.h>
+#endif
+
 #include <private/gui/ComposerService.h>
 
 #ifdef QCOM_HARDWARE
@@ -48,7 +56,8 @@ SurfaceMediaSource::SurfaceMediaSource(uint32_t bufferWidth, uint32_t bufferHeig
     mStopped(false),
     mNumFramesReceived(0),
     mNumFramesEncoded(0),
-    mFirstFrameTimestamp(0)
+    mFirstFrameTimestamp(0),
+    mIsReading(false)
 #ifdef QCOM_HARDWARE
     ,mFirstBufferReleased(true)
 #endif
@@ -73,6 +82,10 @@ SurfaceMediaSource::SurfaceMediaSource(uint32_t bufferWidth, uint32_t bufferHeig
 #endif
 
     sp<ISurfaceComposer> composer(ComposerService::getComposerService());
+    mGraphicBufferAlloc = composer->createGraphicBufferAlloc();
+    if (mGraphicBufferAlloc == NULL) {
+        ALOGE("createGraphicBufferAlloc() failed in SurfaceMediaSource");
+    }
 
     // Note that we can't create an sp<...>(this) in a ctor that will not keep a
     // reference once the ctor ends, as that would cause the refcount of 'this'
@@ -88,10 +101,37 @@ SurfaceMediaSource::SurfaceMediaSource(uint32_t bufferWidth, uint32_t bufferHeig
         ALOGE("SurfaceMediaSource: error connecting to BufferQueue: %s (%d)",
                 strerror(-err), err);
     }
+
+    for (int i = 0; i < MAX_UNDEQUEUED_BUFFERS; i++) {
+        mGraphicBufferYuv[i] = NULL;
+    }
+
+    // get video encoder color format property
+    char value[PROPERTY_VALUE_MAX];
+    property_get(STE_ENCODER_COLOR_FORMAT, &value[0], "");
+    ALOGV("%s STE_ENCODER_COLOR_FORMAT = %s ", __func__, value);
+
+    if (strncmp(value, "yuv420mb", 8) == 0) {
+        mYuvPixelFormat = PIXEL_FORMAT_YCBCR42XMBN;
+    } else if (strncmp(value, "yuv420sp", 8) == 0) {
+        mYuvPixelFormat = PIXEL_FORMAT_YCbCr_420_SP;
+    } else {
+        ALOGE("No Input Color Format Property Using PIXEL_FORMAT_UNKNOWN");
+        mYuvPixelFormat = PIXEL_FORMAT_UNKNOWN;
+    }
+
+    hw_module_t const* module;
+    if (hw_get_module(COPYBIT_HARDWARE_MODULE_ID, &module) == 0) {
+        copybit_open(module, &mBlitEngine);
+    }
 }
 
 SurfaceMediaSource::~SurfaceMediaSource() {
     ALOGV("SurfaceMediaSource::~SurfaceMediaSource");
+    if (mBlitEngine != NULL) {
+        copybit_close(mBlitEngine);
+        mBlitEngine = NULL;
+    }
     if (!mStopped) {
         reset();
 #ifdef QCOM_HARDWARE
@@ -299,13 +339,43 @@ status_t SurfaceMediaSource::read( MediaBuffer **buffer,
         mBufferSlot[mCurrentSlot] = item.mGraphicBuffer;
     }
 
-    mCurrentBuffers.push_back(mBufferSlot[mCurrentSlot]);
-    int64_t prevTimeStamp = mCurrentTimestamp;
-    mCurrentTimestamp = item.mTimestamp;
+    // Allocate buffers
+    if (mGraphicBufferYuv[mCurrentSlot] == NULL && conversionIsNeeded(mBufferSlot[mCurrentSlot])) {
+        ALOGV("Creating new graphicBuffer");
 
-    mNumFramesEncoded++;
-    // Pass the data to the MediaBuffer. Pass in only the metadata
-    passMetadataBuffer(buffer, mBufferSlot[mCurrentSlot]->handle);
+        status_t error;
+        sp<GraphicBuffer> graphicBufferYuv(
+                mGraphicBufferAlloc->createGraphicBuffer(
+                        mWidth, mHeight, mYuvPixelFormat,
+                        GRALLOC_USAGE_HW_VIDEO_ENCODER | GRALLOC_USAGE_HW_2D, &error));
+        if (graphicBufferYuv == NULL) {
+            ALOGE("dequeueBuffer: SurfaceComposer::createGraphicBuffer "
+                    "failed");
+            return error;
+        }
+
+        mGraphicBufferYuv[mCurrentSlot] = graphicBufferYuv;
+    }
+    int64_t prevTimeStamp = mCurrentTimestamp;
+
+    if (conversionIsNeeded(mBufferSlot[mCurrentSlot]) &&
+            OK == convert(mBufferSlot[mCurrentSlot], mGraphicBufferYuv[mCurrentSlot])) {
+        mCurrentBuffers.push_back(mGraphicBufferYuv[mCurrentSlot]);
+        mCurrentBuffersDQ.push_back(mBufferSlot[mCurrentSlot]);
+        mCurrentTimestamp = item.mTimestamp;
+
+        mNumFramesEncoded++;
+        // Pass the data to the MediaBuffer. Pass in only the metadata
+        passMetadataBuffer(buffer, mGraphicBufferYuv[mCurrentSlot]->handle);
+    } else {
+        mCurrentBuffers.push_back(mBufferSlot[mCurrentSlot]);
+        mCurrentTimestamp = item.mTimestamp;
+
+        mNumFramesEncoded++;
+        // Pass the data to the MediaBuffer. Pass in only the metadata
+        passMetadataBuffer(buffer, mBufferSlot[mCurrentSlot]->handle);
+    }
+
 
     (*buffer)->setObserver(this);
     (*buffer)->add_ref();
@@ -314,8 +384,17 @@ status_t SurfaceMediaSource::read( MediaBuffer **buffer,
             mNumFramesEncoded, mCurrentTimestamp / 1000,
             mCurrentTimestamp / 1000 - prevTimeStamp / 1000);
 
+    mIsReading = true;
 
     return OK;
+}
+
+bool SurfaceMediaSource::conversionIsNeeded(const sp<GraphicBuffer>& graphicBuffer) {
+    // Output format not known so no conversion
+    if (mYuvPixelFormat == PIXEL_FORMAT_UNKNOWN) {
+        return false;
+    }
+    return (graphicBuffer->getPixelFormat() != mYuvPixelFormat);
 }
 
 static buffer_handle_t getMediaBufferHandle(MediaBuffer *buffer) {
@@ -334,10 +413,15 @@ void SurfaceMediaSource::signalBufferReturned(MediaBuffer *buffer) {
     Mutex::Autolock lock(mMutex);
 
     buffer_handle_t bufferHandle = getMediaBufferHandle(buffer);
+    buffer_handle_t graphicbufferHandle = NULL;
 
     for (size_t i = 0; i < mCurrentBuffers.size(); i++) {
         if (mCurrentBuffers[i]->handle == bufferHandle) {
             mCurrentBuffers.removeAt(i);
+            if (mCurrentBuffersDQ.itemAt(i) != NULL) {
+                graphicbufferHandle = mCurrentBuffersDQ.itemAt(i)->handle;
+                mCurrentBuffersDQ.removeAt(i);
+            }
             foundBuffer = true;
             break;
         }
@@ -352,7 +436,7 @@ void SurfaceMediaSource::signalBufferReturned(MediaBuffer *buffer) {
             continue;
         }
 
-        if (bufferHandle == mBufferSlot[id]->handle) {
+        if (graphicbufferHandle == mBufferSlot[id]->handle || bufferHandle == mBufferSlot[id]->handle) {
             ALOGV("Slot %d returned, matches handle = %p", id,
                     mBufferSlot[id]->handle);
 
@@ -399,7 +483,9 @@ void SurfaceMediaSource::onBuffersReleased() {
     if (!mFirstBufferReleased) {
 #endif
         mFrameAvailableCondition.signal();
+        if (mIsReading) {
         mStopped = true;
+    }
 #ifdef QCOM_HARDWARE
     } else {
         mFirstBufferReleased = false;
@@ -415,6 +501,52 @@ void SurfaceMediaSource::releaseBuffers() {
     for (int i = 0; i < BufferQueue::NUM_BUFFER_SLOTS; i++) {
         mBufferSlot[i] = 0;
     }
+}
+
+// Convert RGBA data received from surface to color format used by encoder
+status_t SurfaceMediaSource::convert(const sp<GraphicBuffer> &srcBuf, const sp<GraphicBuffer> &dstBuf) {
+    copybit_image_t dstImg;
+    dstImg.w = dstBuf->getWidth();
+    dstImg.h = dstBuf->getHeight();
+    dstImg.format = dstBuf->getPixelFormat();
+    dstImg.handle = (native_handle_t*) dstBuf->getNativeBuffer()->handle;
+
+    copybit_image_t srcImg;
+    srcImg.w = srcBuf->getWidth();
+    srcImg.h = srcBuf->getHeight();
+    srcImg.format = srcBuf->getPixelFormat();
+    srcImg.base = NULL;
+    srcImg.handle = (native_handle_t*) srcBuf->getNativeBuffer()->handle;
+
+    copybit_rect_t dstCrop;
+    dstCrop.l = 0;
+    dstCrop.t = 0;
+    dstCrop.r = dstBuf->getWidth();
+    dstCrop.b = dstBuf->getHeight();
+
+    copybit_rect_t srcCrop;
+    srcCrop.l = 0;
+    srcCrop.t = 0;
+    srcCrop.r = srcBuf->getWidth();
+    srcCrop.b = srcBuf->getHeight();
+
+    ALOGV("%s dWidth=%d, dHeight=%d, dPixel=%x, sPixel=%x ", __func__, dstImg.w, dstImg.h, dstImg.format, srcImg.format);
+
+    region_iterator clip(Region(Rect(dstCrop.r, dstCrop.b)));
+    mBlitEngine->set_parameter(mBlitEngine, COPYBIT_TRANSFORM, 0);
+
+    int err = mBlitEngine->stretch(
+            mBlitEngine, &dstImg, &srcImg, &dstCrop, &srcCrop, &clip);
+    if (err != 0) {
+        ALOGE("\nError: Blit stretch operation failed (err:%d)\n", err);
+        if (mBlitEngine) {
+            copybit_close(mBlitEngine);
+            mBlitEngine = NULL;
+        }
+        return UNKNOWN_ERROR;
+    }
+
+    return OK;
 }
 
 } // end of namespace android

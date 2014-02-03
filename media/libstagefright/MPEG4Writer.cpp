@@ -2177,13 +2177,8 @@ status_t MPEG4Writer::Track::threadEntry() {
             trackProgressStatus(timestampUs);
         }
         if (!hasMultipleTracks) {
-            off64_t offset = mIsAvc? mOwner->addLengthPrefixedSample_l(copy)
-                                 : mOwner->addSample_l(copy);
-            if (mChunkOffsets.empty()) {
-                addChunkOffset(offset);
-            }
-            copy->release();
-            copy = NULL;
+            mChunkSamples.push_back(copy);
+            bufferChunk(timestampUs);
             continue;
         }
 

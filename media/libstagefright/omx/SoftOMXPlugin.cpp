@@ -39,6 +39,7 @@ static const struct {
 #endif
     { "OMX.google.aac.decoder", "aacdec", "audio_decoder.aac" },
     { "OMX.google.aac.encoder", "aacenc", "audio_encoder.aac" },
+    { "OMX.google.aac.decoder", "aacdec", "audio_decoder.aeld" },
     { "OMX.google.amrnb.decoder", "amrdec", "audio_decoder.amrnb" },
     { "OMX.google.amrnb.encoder", "amrnbenc", "audio_encoder.amrnb" },
     { "OMX.google.amrwb.decoder", "amrdec", "audio_decoder.amrwb" },
@@ -57,6 +58,9 @@ static const struct {
     { "OMX.google.mp3.decoder", "mp3dec", "audio_decoder.mp3" },
     { "OMX.google.vorbis.decoder", "vorbisdec", "audio_decoder.vorbis" },
     { "OMX.google.vpx.decoder", "vpxdec", "video_decoder.vpx" },
+#ifdef STE_HARDWARE
+    { "OMX.ST.AFM.decoder.wmapro_v10", "ste_wmapro_v10", "audio_decoder.wmapro" },
+#endif
     { "OMX.google.raw.decoder", "rawdec", "audio_decoder.raw" },
     { "OMX.google.flac.encoder", "flacenc", "audio_encoder.flac" },
 };

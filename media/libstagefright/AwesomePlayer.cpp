@@ -30,6 +30,7 @@ Copyright (c) 2012, Code Aurora Forum. All rights reserved.
 #include "include/AwesomePlayer.h"
 #include "include/DRMExtractor.h"
 #include "include/SoftwareRenderer.h"
+#include "include/NuCachedFileSource2.h"
 #include "include/NuCachedSource2.h"
 #include "include/ThrottledSource.h"
 #include "include/MPEG2TSExtractor.h"
@@ -361,7 +362,7 @@ status_t AwesomePlayer::setDataSource(
 
     reset_l();
 
-    sp<DataSource> dataSource = new FileSource(fd, offset, length);
+    sp<DataSource> dataSource = new NuCachedFileSource2(new FileSource(fd, offset, length));
 
     status_t err = dataSource->initCheck();
 
@@ -1927,7 +1928,7 @@ void AwesomePlayer::onVideoEvent() {
             mVideoBuffer = NULL;
         }
 
-        if (mSeeking == SEEK && isStreamingHTTP() && mAudioSource != NULL
+        if (mSeeking == SEEK && mAudioSource != NULL
                 && !(mFlags & SEEK_PREVIEW)) {
             // We're going to seek the video source first, followed by
             // the audio source.

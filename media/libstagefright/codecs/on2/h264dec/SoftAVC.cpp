@@ -492,6 +492,15 @@ bool SoftAVC::drainAllOutputBuffers() {
             outHeader->nFilledLen = mPictureSize;
             mPicToHeaderMap.removeItem(picId);
             delete header;
+#ifdef STE_HARDWARE
+        } else if (mFirstPicture) {
+
+            // Sending the saved output buffer because of dynamic port reconfiguration
+            drainOneOutputBuffer(mFirstPictureId, mFirstPicture);
+            delete[] mFirstPicture;
+            mFirstPicture = NULL;
+            mFirstPictureId = -1;
+#endif
         } else {
             outHeader->nTimeStamp = 0;
             outHeader->nFilledLen = 0;

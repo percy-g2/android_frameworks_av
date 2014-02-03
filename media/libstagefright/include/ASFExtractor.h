@@ -14,19 +14,31 @@
  * limitations under the License.
  */
 
-#ifndef AVI_EXTRACTOR_H_
-
-#define AVI_EXTRACTOR_H_
+#ifndef ASF_EXTRACTOR_H_
+#define ASF_EXTRACTOR_H_
 
 #include <media/stagefright/foundation/ABase.h>
 #include <media/stagefright/MediaExtractor.h>
 #include <media/stagefright/MediaSource.h>
+#include <media/stagefright/DataSource.h>
+#include <media/stagefright/Utils.h>
 #include <utils/Vector.h>
+#include "asf.h"
 
 namespace android {
 
-struct AVIExtractor : public MediaExtractor {
-    AVIExtractor(const sp<DataSource> &dataSource);
+///////////////////////////////////////////////////////////////////////////////
+// Function Pointer Declaration
+typedef int (*asf_init_function)(asf_file_t *);
+typedef int (*asf_get_packet_function)(asf_file_t *, asf_packet_t *);
+typedef int64_t (*asf_seek_to_msec_function)(asf_file_t *, int64_t);
+typedef asf_packet_t * (*asf_packet_create_function)();
+typedef int (*asf_packet_destroy_function)(asf_packet_t *);
+typedef asf_stream_t *(*asf_get_stream_function)(asf_file_t *, int);
+typedef void (*asf_close_function)(asf_file_t *);
+
+struct ASFExtractor : public MediaExtractor {
+    ASFExtractor(const sp<DataSource> &dataSource);
 
     virtual size_t countTracks();
 
@@ -36,15 +48,13 @@ struct AVIExtractor : public MediaExtractor {
             size_t index, uint32_t flags);
 
     virtual sp<MetaData> getMetaData();
-
+    sp<DataSource> mDataSource;
+    void *mLibAsfHandle;
 protected:
-    virtual ~AVIExtractor();
-    bool mIsVC1SimpleProfile;
-    bool mIsVC1AdvancedProfile;
+    virtual ~ASFExtractor();
 
 private:
-    struct AVISource;
-    struct MP3Splitter;
+    struct ASFSource;
 
     struct SampleInfo {
         uint32_t mOffset;
@@ -54,13 +64,6 @@ private:
     struct Track {
         sp<MetaData> mMeta;
         Vector<SampleInfo> mSamples;
-        uint32_t mRate;
-        uint32_t mScale;
-
-        // If bytes per sample == 0, each chunk represents a single sample,
-        // otherwise each chunk should me a multiple of bytes-per-sample in
-        // size.
-        uint32_t mBytesPerSample;
 
         enum Kind {
             AUDIO,
@@ -74,21 +77,23 @@ private:
         ssize_t mThumbnailSampleIndex;
         size_t mMaxSampleSize;
 
-        uint8_t extraData[4]; // To store the STRUCT_C from AVI container
-        uint8_t *apExtraData; // To store the Sequence header content
-        uint32_t apExtraDataSize; // Size of the extra data stored
-        // If mBytesPerSample > 0:
         double mAvgChunkSize;
         size_t mFirstChunkSize;
+        asf_stream_type_t mStreamNumber;
     };
 
-    sp<DataSource> mDataSource;
     status_t mInitCheck;
     Vector<Track> mTracks;
+    asf_file_t *mFileHandle;
+    int32_t mDataPacketPosition;
+    bool mIsVC1AdvancedProfile;
 
-    off64_t mMovieOffset;
-    bool mFoundIndex;
-    bool mOffsetsAreAbsolute;
+    enum TrackTypes {
+        AUDIO_TRACK,
+        VIDEO_TRACK
+    } mTrackType;
+
+    mutable Mutex mLock;
 
     ssize_t parseChunk(off64_t offset, off64_t size, int depth = 0);
     status_t parseStreamHeader(off64_t offset, size_t size);
@@ -97,36 +102,41 @@ private:
 
     status_t parseHeaders();
 
-    status_t getSampleInfo(
-            size_t trackIndex, size_t sampleIndex,
-            off64_t *offset, size_t *size, bool *isKey,
-            int64_t *sampleTimeUs);
+    status_t getPacket(asf_file_t *mFileHandle, asf_packet_t *mPacket);
 
     status_t getSampleTime(
             size_t trackIndex, size_t sampleIndex, int64_t *sampleTimeUs);
 
-    status_t getSampleIndexAtTime(
-            size_t trackIndex,
-            int64_t timeUs, MediaSource::ReadOptions::SeekMode mode,
-            size_t *sampleIndex) const;
+    status_t getSampleIndexAtTime(asf_file_t *mfileHandle, int64_t timeUs);
 
     status_t addMPEG4CodecSpecificData(size_t trackIndex);
     status_t addH264CodecSpecificData(size_t trackIndex);
-    status_t addVC1CodecSpecificData(size_t trackIndex);
+    status_t addVC1CodecSpecificData(asf_bitmapinfoheader_t *bmp, sp<MetaData> meta);
+    status_t addWMACodecSpecificData(asf_waveformatex_t *wav, sp<MetaData> meta);
 
     static bool IsCorrectChunkType(
         ssize_t trackIndex, Track::Kind kind, uint32_t chunkType);
+    asf_file_t* asfOpenConfigure();
+    asf_file_t* asfOpenCb(asf_iostream_t *iostream);
 
-    DISALLOW_EVIL_CONSTRUCTORS(AVIExtractor);
+    /////////////////////////////////////////////////////////////////////
+    // ASF Library function pointers
+    asf_init_function           libasf_init;
+    asf_get_packet_function     libasf_get_packet;
+    asf_seek_to_msec_function   libasf_seek_to_msec;
+    asf_packet_create_function  libasf_packet_create;
+    asf_packet_destroy_function libasf_packet_destroy;
+    asf_get_stream_function     libasf_get_stream;
+    asf_close_function          libasf_close;
+
+    DISALLOW_EVIL_CONSTRUCTORS(ASFExtractor);
+
 };
 
-class String8;
-struct AMessage;
-
-bool SniffAVI(
+bool SniffASF(
         const sp<DataSource> &source, String8 *mimeType, float *confidence,
         sp<AMessage> *);
 
 }  // namespace android
 
-#endif  // AVI_EXTRACTOR_H_
+#endif  // ASF_EXTRACTOR_H_
