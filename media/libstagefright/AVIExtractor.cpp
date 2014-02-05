@@ -621,7 +621,6 @@ static const char *GetMIMETypeForHandler(uint32_t handler) {
             return MEDIA_MIMETYPE_VIDEO_AVC;
 
         case FOURCC('w', 'm', 'v', '3'):
-        case FOURCC('W', 'M', 'V', '3'):
         case FOURCC('w', 'v', 'c', '1'):
         case FOURCC('W', 'V', 'C', '1'):
             return MEDIA_MIMETYPE_VIDEO_VC1;
@@ -638,7 +637,6 @@ static const char *GetMIMETypeForHandler(uint32_t handler) {
 
         case FOURCC('W','M','V','3'):
         case FOURCC('W','M','V','9'):
-        case FOURCC('W','V','C','1'):
             return MEDIA_MIMETYPE_VIDEO_WMV;
 
         default:
