@@ -32,7 +32,7 @@
 #include <media/stagefright/Utils.h>
 
 #include "include/ASFExtractor.h"
-#include "asfint.h"
+#include "include/asfint.h"
 #include <dlfcn.h>
 
 static int32_t asfFileioReadCbSf(void *iostream,  void *buffer, int32_t size);
