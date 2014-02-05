@@ -66,7 +66,6 @@ const char *MEDIA_MIMETYPE_TEXT_SUBRIP = "application/x-subrip";
 const char *MEDIA_MIMETYPE_AUDIO_EVRC = "audio/evrc";
 
 const char *MEDIA_MIMETYPE_VIDEO_WMV = "video/x-ms-wmv";
-const char *MEDIA_MIMETYPE_AUDIO_WMA = "audio/x-ms-wma";
 const char *MEDIA_MIMETYPE_CONTAINER_ASF = "video/x-ms-asf";
 const char *MEDIA_MIMETYPE_VIDEO_DIVX = "video/divx";
 const char *MEDIA_MIMETYPE_AUDIO_AC3 = "audio/ac3";
