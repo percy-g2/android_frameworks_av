@@ -59,6 +59,9 @@ public:
                                     // (See setPositionUpdatePeriod()).
         EVENT_BUFFER_END = 5,       // Playback head is at the end of the buffer.
                                     // Not currently used by android.media.AudioTrack.
+#ifdef STE_AUDIO
+        EVENT_LATENCY_CHANGED = 6,   // Audio sink latency has changed.
+#endif
         EVENT_NEW_IAUDIOTRACK = 6,  // IAudioTrack was re-created, either due to re-routing and
                                     // voluntary invalidation by mediaserver, or mediaserver crash.
         EVENT_STREAM_END = 7,       // Sent after all the buffers queued in AF and HW are played
@@ -650,6 +653,11 @@ protected:
             // FIXME enum is faster than strcmp() for parameter 'from'
             status_t restoreTrack_l(const char *from);
 
+#ifdef STE_AUDIO
+            static void LatencyCallback(void *cookie, audio_io_handle_t output,
+                                 uint32_t sinkLatency);
+#endif
+
             bool     isOffloaded() const
                 { return (mFlags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) != 0; }
 
@@ -729,6 +737,10 @@ protected:
     int                     mPreviousPriority;          // before start()
     SchedPolicy             mPreviousSchedulingGroup;
     bool                    mAwaitBoost;    // thread should wait for priority boost before running
+#ifdef STE_AUDIO
+    int                     mLatencyClientId;
+#endif
+
 
     // The proxy should only be referenced while a lock is held because the proxy isn't
     // multi-thread safe, especially the SingleStateQueue part of the proxy.

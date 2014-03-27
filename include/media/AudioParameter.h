@@ -48,6 +48,9 @@ public:
     static const char * const keyFrameCount;
     static const char * const keyInputSource;
     static const char * const keyScreenState;
+#ifdef STE_AUDIO
+    static const char *keySinkLatency;
+#endif
 
     String8 toString();
 
